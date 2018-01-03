@@ -1,0 +1,17 @@
+---
+- name: Find master node IPv4 address
+  set_fact:
+    master_ipv4: "{{ hostvars[item].ansible_ssh_host }}"
+  with_items: "{{ groups.production_group }}"
+  when:
+  - "'master-0' in hostvars[item].inventory_hostname_short"
+  - "[hostvars[item].ansible_ssh_host] | ipv4"
+  until: "master_ipv4 is defined"
+
+- name: Set IP address of the master node as control plane address
+  replace:
+    dest: "{{ playbook_dir }}/{{ item }}"
+    # '__master_0_ipv4__' exists installing non-ha deployment (When LB absent)
+    regexp: '__master_0_ipv4__'
+    replace: "{{ master_ipv4 }}"
+  with_items: ['ocp-install.yaml', 'minor-update.yaml']

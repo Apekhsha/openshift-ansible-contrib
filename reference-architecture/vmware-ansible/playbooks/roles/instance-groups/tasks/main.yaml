@@ -17,8 +17,8 @@
 
 - name: Add masters to requisite groups
   add_host:
-    name: "{{ hostvars[item].inventory_hostname }}"
-    openshift_hostname: "{{ hostvars[item].inventory_hostname }}"
+    name: "{{ hostvars[item]['guest']['ipaddress'] }}"
+    openshift_hostname: "{{ hostvars[item]['guest']['ipaddress'] }}"
     groups: allnodes, masters, etcd, nodes, cluster_hosts, master
     openshift_node_labels:
       role: master
@@ -26,7 +26,8 @@
 
 - name: Add a master to the single master group
   add_host:
-    name: "{{ hostvars[item].inventory_hostname }}"
+    name: "{{ hostvars[item]['guest']['ipaddress'] }}"
+    openshift_hostname: "{{ hostvars[item]['guest']['ipaddress'] }}"
     groups: single_master
     openshift_node_labels:
       role: master
@@ -34,17 +35,17 @@
 
 - name: Add infra instances to host group
   add_host:
-    name: "{{ hostvars[item].inventory_hostname }}"
+    name: "{{ hostvars[item]['guest']['ipaddress'] }}"
+    openshift_hostname: "{{ hostvars[item]['guest']['ipaddress'] }}"
     groups: allnodes, nodes, cluster_hosts, schedulable_nodes, infra
-    openshift_hostname: "{{ hostvars[item].inventory_hostname }}"
     openshift_node_labels:
       role: infra
   with_items: "{{ groups[cluster_id + '-infra'] | default([]) }}"
 
 - name: Add app instances to host group
   add_host:
-    name: "{{ hostvars[item].inventory_hostname }}"
-    openshift_hostname: "{{ hostvars[item].inventory_hostname }}"
+    name: "{{ hostvars[item]['guest']['ipaddress'] }}"
+    openshift_hostname: "{{ hostvars[item]['guest']['ipaddress'] }}"
     groups: allnodes, nodes, cluster_hosts, schedulable_nodes, app
     openshift_node_labels:
       role: app
@@ -52,8 +53,8 @@
 
 - name: Add new node instances to host group
   add_host:
-    name: "{{ hostvars[item].inventory_hostname }}"
-    openshift_hostname: "{{ hostvars[item].inventory_hostname }}"
+    name: "{{ hostvars[item]['guest']['ipaddress'] }}"
+    openshift_hostname: "{{ hostvars[item]['guest']['ipaddress'] }}"
     groups: allnodes, new_nodes
     openshift_node_labels:
       role: "{{ node_type }}"
@@ -63,34 +64,36 @@
 
 - name: Add NFS instances to allnodes
   add_host:
-    name: "{{ hostvars[item].inventory_hostname }}"
+    name: "{{ hostvars[item]['guest']['ipaddress'] }}"
+    openshift_hostname: "{{ hostvars[item]['guest']['ipaddress'] }}"
     groups: allnodes
   with_items: "{{ groups[cluster_id + '-networkfs'] | default([]) }}"
 
 - name: Add loadbalancer instances to allnodes
   add_host:
-    name: "{{ hostvars[item].inventory_hostname }}"
+    name: "{{ hostvars[item]['guest']['ipaddress'] }}"
+    openshift_hostname: "{{ hostvars[item]['guest']['ipaddress'] }}"
     groups: allnodes
   with_items: "{{ groups[cluster_id + '-loadbalancer'] | default([]) }}"
 
 - name: Add cns instances to allnodes
   add_host:
-    name: "{{ hostvars[item].inventory_hostname }}"
-    openshift_hostname: "{{ hostvars[item].inventory_hostname }}"
+    name: "{{ hostvars[item]['guest']['ipaddress'] }}"
+    openshift_hostname: "{{ hostvars[item]['guest']['ipaddress'] }}"
     groups: allnodes
   with_items: "{{ groups[cluster_id + '-storage'] | default([]) }}"
 
 - name: Add crs instances to allnodes
   add_host:
-    name: "{{ hostvars[item].inventory_hostname }}"
-    openshift_hostname: "{{ hostvars[item].inventory_hostname }}"
+    name: "{{ hostvars[item]['guest']['ipaddress'] }}"
+    openshift_hostname: "{{ hostvars[item]['guest']['ipaddress'] }}"
     groups: allnodes
   with_items: "{{ groups[cluster_id + '-crs'] | default([]) }}"
 
 - name: Add cns instances to host group
   add_host:
-    name: "{{ hostvars[item].inventory_hostname }}"
-    openshift_hostname: "{{ hostvars[item].inventory_hostname }}"
+    name: "{{ hostvars[item]['guest']['ipaddress'] }}"
+    openshift_hostname: "{{ hostvars[item]['guest']['ipaddress'] }}"
     groups: nodes, cluster_hosts, schedulable_nodes
     openshift_node_labels:
       role: storage
@@ -100,8 +103,8 @@
 
 - name: Add crs nodes to the storage group
   add_host:
-    name: "{{ hostvars[item].inventory_hostname }}"
-    openshift_hostname: "{{ hostvars[item].inventory_hostname }}"
+    name: "{{ hostvars[item]['guest']['ipaddress'] }}"
+    openshift_hostname: "{{ hostvars[item]['guest']['ipaddress'] }}"
     groups: storage, crs
   with_items: "{{ groups[cluster_id + '-crs'] }}"
   when:
@@ -109,8 +112,8 @@
 
 - name: Add a crs node to the single crs group
   add_host:
-    name: "{{ hostvars[item].inventory_hostname }}"
-    openshift_hostname: "{{ hostvars[item].inventory_hostname }}"
+    name: "{{ hostvars[item]['guest']['ipaddress'] }}"
+    openshift_hostname: "{{ hostvars[item]['guest']['ipaddress'] }}"
     groups: single_crs
   with_items: "{{ groups[cluster_id + '-crs'][0] }}"
   when:
