@@ -22,6 +22,20 @@
   - "'static' == vm_ipaddr_allocation_type"
   - host_data | default({})
 
+- name: Create boolean var that says whether dns_zone is set or not
+  set_fact:
+    dns_zone_is_set: not( (dns_zone is undefined) or (dns_zone is none) or
+                          (dns_zone | trim == '') )
+
+- name: Define 'customization' block for the NFS VM
+  set_fact:
+    vm_customization:
+      domain: "{{ dns_zone }}"
+      dns_servers: "[ {{ vm_dns }} ]"
+      dns_suffix: "{{ dns_zone }}"
+      hostname: "{{ host_data.value.guestname }}"
+  when: dns_zone_is_set
+
 - name: Create haproxy VM on vCenter
   vmware_guest:
     hostname: "{{ vcenter_host }}"
@@ -48,12 +62,7 @@
       datastore: "{{ vcenter_datastore }}"
       type: thin
     networks: "{{ network_parameters }}"
-    customization:
-      domain: "{{dns_zone}}"
-      dns_servers:
-      - "{{ vm_dns }}"
-      dns_suffix: "{{dns_zone}}"
-      hostname: "{{ host_data.value.guestname}}"
+    customization: "{{ vm_customization | default({}) }}"
   register: facts
   when: host_data | default({})
 
@@ -62,4 +71,14 @@
     hostname: "{{ host_data.value.guestname }}"
     ansible_ssh_host: "{{ facts.instance.hw_eth0.ipaddresses | ipv4 | first }}"
     groups: "{{ host_data.value.tag }}, haproxy_group"
-  when: host_data | default({})
+  when:
+  - host_data | default({})
+  - dns_zone_is_set
+
+- name: Add haproxy server to inventory
+  add_host:
+    hostname: "{{ facts.instance.hw_eth0.ipaddresses | ipv4 | first }}"
+    groups: "{{ host_data.value.tag }}, haproxy_group"
+  when:
+  - host_data | default({})
+  - not(dns_zone_is_set)
