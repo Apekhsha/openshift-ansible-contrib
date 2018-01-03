@@ -17,18 +17,6 @@
   with_dict: "{{ host_inventory }}"
   when: "'static' == vm_ipaddr_allocation_type"
 
-- name: Define 'customization' block for the VMs
-  set_fact:
-    vm_customization: "{{ vm_customization | default({}) |
-                          combine({item.value.guestname: {
-                              'domain': dns_zone,
-                              'dns_servers': vm_dns,
-                              'dns_suffix': dns_zone,
-                              'hostname': item.value.guestname)}}"
-  with_dict: "{{ host_inventory }}"
-  when: not( (dns_zone is undefined) or (dns_zone is none) or
-             (dns_zone | trim == '') )
-
 - name: Define memory and disk parameters per node type
   set_fact:
     host_data:
@@ -71,7 +59,12 @@
     hardware:
       memory_mb: "{{ host_data[item.value.guesttype].memory }}"
     networks: "[ {{ network_parameters[item.value.guestname] }} ]"
-    customization: "{{ (vm_customization | default({}))[item.value.guestname] | default({}) }}"
+    customization:
+      domain: "{{dns_zone}}"       
+      dns_servers:        
+      - "{{ vm_dns }}"        
+      dns_suffix: "{{ dns_zone }}"        
+      hostname: "{{ item.value.guestname }}"
   with_dict: "{{ host_inventory }}"
   when: "item.value.guesttype in ['app', 'master', 'infra']"
   register: facts
@@ -92,16 +85,4 @@
     ansible_ssh_host: "{{ ip4addrs[item.value.guestname] }}"
     groups: "{{ item.value.tag }}, production_group"
   with_dict: "{{ host_inventory }}"
-  when:
-  - "item.value.guesttype in ['app', 'master', 'infra']"
-  - not( (dns_zone is undefined) or (dns_zone is none) or
-         (dns_zone | trim == '') )
-
-- name: Add production VMs to inventory
-  add_host:
-    hostname: "{{ ip4addrs[item.value.guestname] }}"
-    groups: "{{ item.value.tag }}, production_group"
-  with_dict: "{{ host_inventory }}"
-  when:
-  - "item.value.guesttype in ['app', 'master', 'infra']"
-  - (dns_zone is undefined) or (dns_zone is none) or (dns_zone | trim == '')
+  when: "item.value.guesttype in ['app', 'master', 'infra']"

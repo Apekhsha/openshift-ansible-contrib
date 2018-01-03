@@ -408,7 +408,7 @@ class VMwareOnOCP(object):
         d = {}
         d['host_inventory'] = {}
 
-        if self.byo_nfs == "False":
+        if self.byo_nfs == "False" and False:
             if self.ocp_hostname_prefix not in self.nfs_host:
                 nfs_entry=self.ocp_hostname_prefix+self.nfs_host
             else:
@@ -545,14 +545,14 @@ class VMwareOnOCP(object):
         update_file = "playbooks/minor-update.yaml"
         for ocp_file in ("playbooks/ocp-install.yaml", "playbooks/minor-update.yaml"):
             for line in fileinput.input(ocp_file, inplace=True):
-                if line.startswith("    wildcard_zone:") and self.dns_zone:
+                if line.startswith("    wildcard_zone:"):
                     print ("    wildcard_zone: " + self.app_dns_prefix + "." +
                            self.dns_zone)
                 elif line.startswith("    load_balancer_hostname:"):
-                    if self.dns_zone and int(self.master_nodes) > 1:
+                    if (self.master_nodes) > 1:
                         lb_url = self.lb_host + "." + self.dns_zone
                     else:
-                        lb_url = '127.0.0.1'
+                        lb_url = '__master_0_ipv4__'
                     print "    load_balancer_hostname: " + lb_url
                 elif line.startswith("    deployment_type:"):
                     print "    deployment_type: " + self.deployment_type
@@ -621,7 +621,8 @@ class VMwareOnOCP(object):
         tags = []
         tags.append('setup')
 
-        if self.byo_nfs == "False":
+        # TODO(vponomar): make it configurable
+        if self.byo_nfs == "False" and False:
             tags.append('nfs')
 
         tags.append('prod')

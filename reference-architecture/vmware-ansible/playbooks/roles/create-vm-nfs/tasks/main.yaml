@@ -22,20 +22,6 @@
   - "'static' == vm_ipaddr_allocation_type"
   - host_data | default({})
 
-- name: Create boolean var that says whether dns_zone is set or not
-  set_fact:
-    dns_zone_is_set: not( (dns_zone is undefined) or (dns_zone is none) or
-                          (dns_zone | trim == '') )
-
-- name: Define 'customization' block for the NFS VM
-  set_fact:
-    vm_customization:
-      domain: "{{ dns_zone }}"
-      dns_servers: "[ {{ vm_dns }} ]"
-      dns_suffix: "{{ dns_zone }}"
-      hostname: "{{ host_data.value.guestname }}"
-  when: dns_zone_is_set
-
 - name: Create NFS VM on vCenter
   vmware_guest:
     hostname: "{{ vcenter_host }}"
@@ -62,23 +48,19 @@
       datastore: "{{ vcenter_datastore }}"
       type: thin
     networks: "{{ network_parameters }}"
-    customization: "{{ vm_customization | default({}) }}"
+    customization:
+      domain: "{{dns_zone}}"       
+      dns_servers:        
+      - "{{ vm_dns }}"        
+      dns_suffix: "{{ dns_zone }}"        
+      hostname: "{{ host_data.value.guestname }}"
   register: facts
   when: host_data | default({})
 
 - name: Add NFS server to inventory
   add_host:
     hostname: "{{ host_data.value.guestname }}"
+    ansible_fqdn: "{{ item.value.guestname }}.{{ dns_zone }}"
     ansible_ssh_host: "{{ facts.instance.hw_eth0.ipaddresses | ipv4 | first }}"
     groups: "{{ host_data.value.tag }}, nfs_group"
-  when:
-  - host_data | default({})
-  - dns_zone_is_set
-
-- name: Add NFS server to inventory
-  add_host:
-    hostname: "{{ facts.instance.hw_eth0.ipaddresses | ipv4 | first }}"
-    groups: "{{ host_data.value.tag }}, nfs_group"
-  when:
-  - host_data | default({})
-  - not(dns_zone_is_set)
+  when: host_data | default({})
