@@ -1,8 +1,19 @@
 ---
-- name: Add mapping of new domain names of the cluster nodes to each other
+- name: Create directory for dnsmasq config file if absent
+  file:
+    dest: /etc/dnsmasq.d
+    state: directory
+    mode: 0644
+
+- name: Create custom dnsmasq config file for current cluster
+  file:
+    dest: '/etc/dnsmasq.d/openshift-cluster-{{ cluster_id }}.conf'
+    state: touch
+
+- name: Write data to custom dnsmasq config file
   lineinfile:
-    dest: /etc/hosts
-    line: "{{ hostvars[item].ansible_ssh_host }} {{ hostvars[item].inventory_hostname }} {{ hostvars[item].inventory_hostname_short }}"
+    dest: '/etc/dnsmasq.d/openshift-cluster-{{ cluster_id }}.conf'
+    line: "address=/{{ hostvars[item].inventory_hostname_short }}/{{ hostvars[item].ansible_ssh_host }}"
     state: present
   with_items: "{{ groups.all }}"
   when: "[hostvars[item].ansible_ssh_host] | ipv4"
