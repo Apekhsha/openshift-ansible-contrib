@@ -1,4 +1,20 @@
 ---
+- name: Remove stale data from /etc/hosts if exist
+  lineinfile:
+    dest: '/etc/hosts'
+    regexp: '{{ hostvars[item].inventory_hostname }}'
+    state: absent
+  with_items: "{{ groups.all }}"
+  when: "[hostvars[item].ansible_ssh_host] | ipv4"
+
+- name: Update /etc/hosts with new cluster nodes
+  lineinfile:
+    dest: /etc/hosts
+    line: "{{ hostvars[item].ansible_ssh_host }} {{ hostvars[item].inventory_hostname }} {{ hostvars[item].inventory_hostname_short }}"
+    state: present
+  with_items: "{{ groups.all }}"
+  when: "[hostvars[item].ansible_ssh_host] | ipv4"
+
 - name: Create directory for dnsmasq config file if absent
   file:
     dest: /etc/dnsmasq.d
@@ -9,6 +25,14 @@
   file:
     dest: '/etc/dnsmasq.d/openshift-cluster-{{ cluster_id }}.conf'
     state: touch
+
+- name: Remove stale data from custom dnsmasq config file is exist
+  lineinfile:
+    dest: '/etc/dnsmasq.d/openshift-cluster-{{ cluster_id }}.conf'
+    regexp: "{{ hostvars[item].inventory_hostname_short }}"
+    state: absent
+  with_items: "{{ groups.all }}"
+  when: "[hostvars[item].ansible_ssh_host] | ipv4"
 
 - name: Write data to custom dnsmasq config file
   lineinfile:
