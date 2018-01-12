@@ -1,0 +1,15 @@
+---
+- name: Delete old left-overs if exist
+  lineinfile:
+    dest: '/etc/hosts'
+    regexp: '{{ hostvars[item].inventory_hostname }}'
+    state: absent
+  with_items: "{{ groups.all }}"
+  when: "[hostvars[item].ansible_ssh_host] | ipv4"
+
+- name: Add domain name mapping to newly created cluster nodes
+  lineinfile:
+    dest: '/etc/hosts'
+    line: '{{ hostvars[item].ansible_ssh_host }} {{ hostvars[item].inventory_hostname }}'
+  with_items: "{{ groups.all }}"
+  when: "[hostvars[item].ansible_ssh_host] | ipv4"
