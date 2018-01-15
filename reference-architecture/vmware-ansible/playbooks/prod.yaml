@@ -4,7 +4,6 @@
     - vars/main.yaml
   roles:
     - create-vm-prod-ose
-    - setup-control-plane-endpoint
     - setup-custom-domain-names-for-ansible-runner
 
 - name: fulfill OSE3 prerequisites on production hosts roles
