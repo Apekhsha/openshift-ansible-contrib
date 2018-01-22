@@ -7,7 +7,7 @@
                                 'type': vm_ipaddr_allocation_type,
                                 'gateway': vm_gw}}, recursive=True) }}"
   with_dict: "{{ host_inventory }}"
-  when: "item.item.value.guesttype in ['cns', ]"
+  when: "item.value.guesttype in ['cns', ]"
 
 - name: Define static network parameters per node
   set_fact:
@@ -18,7 +18,7 @@
   with_dict: "{{ host_inventory }}"
   when:
   - "'static' == vm_ipaddr_allocation_type"
-  - "item.item.value.guesttype in ['cns', ]"
+  - "item.value.guesttype in ['cns', ]"
 
 - name: Create CNS production VMs on vCenter
   vmware_guest:
@@ -40,9 +40,9 @@
       datastore: "{{ vcenter_datastore }}"
       type: thin
     - size_gb: 40
-    #  datastore: "{{ vcenter_datastore }}"
-    #  type: thin
-    #- size_gb: 40
+      datastore: "{{ vcenter_datastore }}"
+      type: thin
+    - size_gb: 40
     #  datastore: "{{ vcenter_datastore }}"
     #  type: thin
     #- size_gb: 300
