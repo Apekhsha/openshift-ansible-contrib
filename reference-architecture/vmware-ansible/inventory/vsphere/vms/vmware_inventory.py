@@ -515,7 +515,9 @@ class VMWareInventory(object):
                 if self.lowerkeys:
                     method = method.lower()
 
-                rdata[method] = self._process_object_types(methodToCall, level=level)
+                rdata[method] = self._process_object_types(
+                    methodToCall,
+                    level=((level - 10) if method == 'guest' else level))
 
         return rdata
 

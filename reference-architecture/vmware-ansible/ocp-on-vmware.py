@@ -64,6 +64,7 @@ class VMwareOnOCP(object):
     inventory_file='infrastructure.json'
     vmware_ini_path=None
     clean=None
+    vm_ipaddr_allocation_type=None,
 
     def __init__(self, load=True):
         if load:
@@ -76,7 +77,9 @@ class VMwareOnOCP(object):
             else:
                 if click.confirm('Overwrite the existing inventory file?'):
                     self._create_inventory_file()
-        if self.args.create_ocp_vars or "load_balancer_hostname:" in self.lb_config:
+        if (self.args.create_ocp_vars or
+                "load_balancer_hostname:" in self.lb_config or
+                self.vm_ipaddr_allocation_type == 'dhcp'):
             if self.no_confirm:
                 self._create_ocp_vars()
             else:
@@ -173,6 +176,8 @@ class VMwareOnOCP(object):
                 print "app_nodes=3"
             elif line.startswith("vm_ipaddr_start="):
                 print "vm_ipaddr_start="
+            elif line.startswith("vm_ipaddr_allocation_type="):
+                print "vm_ipaddr_allocation_type="
             elif line.startswith("ldap_user_password="):
                 print "ldap_user_password="
             elif line.startswith("ldap_fqdn="):
@@ -231,6 +236,7 @@ class VMwareOnOCP(object):
             'vcenter_resource_pool':'/Resources/OCP3',
             'app_dns_prefix':'apps',
             'vm_network':'VM Network',
+            'vm_ipaddr_allocation_type': 'static',
             'rhel_subscription_pool':'Red Hat OpenShift Container Platform, Premium*',
             'openshift_sdn':'redhat/openshift-ovs-subnet',
             'byo_lb':'False',
@@ -284,6 +290,7 @@ class VMwareOnOCP(object):
         self.vm_gw = config.get('vmware', 'vm_gw')
         self.vm_netmask = config.get('vmware', 'vm_netmask')
         self.vm_network = config.get('vmware', 'vm_network')
+        self.vm_ipaddr_allocation_type = config.get('vmware', 'vm_ipaddr_allocation_type')
         self.rhel_subscription_user = config.get('vmware', 'rhel_subscription_user')
         self.rhel_subscription_pass = config.get('vmware', 'rhel_subscription_pass')
         self.rhel_subscription_server = config.get('vmware', 'rhel_subscription_server')
@@ -303,19 +310,37 @@ class VMwareOnOCP(object):
         self.app_nodes = config.get('vmware', 'app_nodes')
         self.storage_nodes = config.get('vmware', 'storage_nodes')
         self.vm_ipaddr_start = config.get('vmware', 'vm_ipaddr_start')
-        self.ocp_hostname_prefix = config.get('vmware', 'ocp_hostname_prefix')
+        self.vm_ipaddr_allocation_type = config.get('vmware', 'vm_ipaddr_allocation_type')
+        self.ocp_hostname_prefix = config.get('vmware', 'ocp_hostname_prefix') or ''
         self.auth_type = config.get('vmware', 'auth_type')
         self.ldap_user = config.get('vmware', 'ldap_user')
         self.ldap_user_password = config.get('vmware', 'ldap_user_password')
         self.ldap_fqdn = config.get('vmware', 'ldap_fqdn')
         err_count=0
 
-        required_vars = {'dns_zone':self.dns_zone, 'vcenter_host':self.vcenter_host, 'vcenter_password':self.vcenter_password, 'vm_ipaddr_start':self.vm_ipaddr_start, 'ldap_fqdn':self.ldap_fqdn, 'ldap_user_password':self.ldap_user_password, 'vm_dns':self.vm_dns, 'vm_gw':self.vm_gw, 'vm_netmask':self.vm_netmask, 'vcenter_datacenter':self.vcenter_datacenter}
+        required_vars = {
+            'dns_zone': self.dns_zone,
+            'vcenter_host': self.vcenter_host,
+            'vcenter_password': self.vcenter_password,
+            'vm_ipaddr_start': self.vm_ipaddr_start,
+            'vm_ipaddr_allocation_type': self.vm_ipaddr_allocation_type,
+            'ldap_fqdn': self.ldap_fqdn,
+            'ldap_user_password': self.ldap_user_password,
+            'vm_dns': self.vm_dns,
+            'vm_gw': self.vm_gw,
+            'vm_netmask': self.vm_netmask,
+            'vcenter_datacenter': self.vcenter_datacenter,
+        }
 
         for k, v in required_vars.items():
             if v == '':
                 err_count += 1
                 print "Missing %s " % k
+        if required_vars['vm_ipaddr_allocation_type'] not in ('dhcp', 'static'):
+            err_count += 1
+            print ("'vm_ipaddr_allocation_type' can take only "
+                   "'dhcp' and 'static' values.")
+
         if err_count > 0:
             print "Please fill out the missing variables in %s " %  self.vmware_ini_path
             exit (1)
@@ -356,6 +381,7 @@ class VMwareOnOCP(object):
         if self.byo_lb == "False":
             click.echo('\tlb_host: %s' % self.lb_host)
         click.echo('\tvm_ipaddr_start: %s' % self.vm_ipaddr_start)
+        click.echo('\tvm_ipaddr_allocation_type: %s' % self.vm_ipaddr_allocation_type)
         click.echo('\tUsing values from: %s' % self.vmware_ini_path)
         click.echo("")
         if not self.no_confirm:
@@ -384,31 +410,34 @@ class VMwareOnOCP(object):
         d = {}
         d['host_inventory'] = {}
 
-        if self.byo_nfs == "False":
+        if self.byo_nfs == "False" and False:
             if self.ocp_hostname_prefix not in self.nfs_host:
-                nfs_entry=self.ocp_hostname_prefix+self.nfs_host
+                nfs_entry = "%s-%s" % (self.ocp_hostname_prefix, self.nfs_host)
             else:
-                nfs_entry=self.nfs_host
+                nfs_entry = self.nfs_host
             d['host_inventory'][nfs_entry] = {}
             d['host_inventory'][nfs_entry]['guestname'] = nfs_entry
+            d['host_inventory'][nfs_entry]['guesttype'] = 'nfs'
+            d['host_inventory'][nfs_entry]['vm_ipaddr_allocation_type'] = (
+                self.vm_ipaddr_allocation_type)
             d['host_inventory'][nfs_entry]['ip4addr'] = ip4addr[0]
             d['host_inventory'][nfs_entry]['tag'] = str(self.cluster_id) + "-networkfs"
             bind_entry.append(nfs_entry + "\t\tA\t" + ip4addr[0])
             del ip4addr[0]
 
-        if self.byo_lb == "False":
+        if self.byo_lb == "False" and int(self.master_nodes) > 1:
             if self.lb_ha_ip:
                 bind_entry.append(self.lb_ha_ip + "\t\tA\t" + wild_ip)
                 i = 2
             else:
                 i = 1
             for i in range(0, int(i)):
-                if self.ocp_hostname_prefix is not None:
-                    lb_name=self.ocp_hostname_prefix+"haproxy-"+str(i)
-                else:
-                    lb_name="haproxy-"+str(i)
+                lb_name = "%s-haproxy-%d" % (self.ocp_hostname_prefix, i)
                 d['host_inventory'][lb_name] = {}
                 d['host_inventory'][lb_name]['guestname'] = lb_name
+                d['host_inventory'][lb_name]['guesttype'] = 'haproxy'
+                d['host_inventory'][lb_name]['vm_ipaddr_allocation_type'] = (
+                self.vm_ipaddr_allocation_type)
                 if not self.lb_ha_ip:
                     d['host_inventory'][lb_name]['ip4addr'] = wild_ip
                     bind_entry.append(lb_name + "\tA\t" + wild_ip)
@@ -419,36 +448,36 @@ class VMwareOnOCP(object):
                 d['host_inventory'][lb_name]['tag'] =  str(self.cluster_id) + "-loadbalancer"
 
         for i in range(0, int(self.master_nodes)):
-            if self.ocp_hostname_prefix is not None:
-                master_name=self.ocp_hostname_prefix+"master-"+str(i)
-            else:
-                master_name="master-"+str(i)
+            master_name = "%s-master-%d" % (self.ocp_hostname_prefix, i)
             d['host_inventory'][master_name] = {}
             d['host_inventory'][master_name]['guestname'] = master_name
+            d['host_inventory'][master_name]['guesttype'] = 'master'
+            d['host_inventory'][master_name]['vm_ipaddr_allocation_type'] = (
+                self.vm_ipaddr_allocation_type)
             d['host_inventory'][master_name]['ip4addr'] = ip4addr[0]
             d['host_inventory'][master_name]['tag'] = str(self.cluster_id) + '-master'
             bind_entry.append(master_name + "\tA\t" + ip4addr[0])
             del ip4addr[0]
 
         for i in range(0, int(self.app_nodes)):
-            if self.ocp_hostname_prefix is not None:
-                app_name=self.ocp_hostname_prefix+"app-"+str(i)
-            else:
-                app_name="app-"+str(i)
+            app_name = "%s-app-%d" % (self.ocp_hostname_prefix, i)
             d['host_inventory'][app_name] = {}
             d['host_inventory'][app_name]['guestname'] = app_name
+            d['host_inventory'][app_name]['guesttype'] = 'app'
+            d['host_inventory'][app_name]['vm_ipaddr_allocation_type'] = (
+                self.vm_ipaddr_allocation_type)
             d['host_inventory'][app_name]['ip4addr'] = ip4addr[0]
             d['host_inventory'][app_name]['tag'] = str(self.cluster_id) + '-app'
             bind_entry.append(app_name + "\t\tA\t" + ip4addr[0])
             del ip4addr[0]
 
         for i in range(0, int(self.infra_nodes)):
-            if self.ocp_hostname_prefix is not None:
-                infra_name=self.ocp_hostname_prefix+"infra-"+str(i)
-            else:
-                infra_name="infra-"+str(i)
+            infra_name = "%s-infra-%d" % (self.ocp_hostname_prefix, i)
             d['host_inventory'][infra_name] = {}
             d['host_inventory'][infra_name]['guestname'] = infra_name
+            d['host_inventory'][infra_name]['guesttype'] = 'infra'
+            d['host_inventory'][infra_name]['vm_ipaddr_allocation_type'] = (
+                self.vm_ipaddr_allocation_type)
             d['host_inventory'][infra_name]['ip4addr'] = ip4addr[0]
             d['host_inventory'][infra_name]['tag'] = str(self.cluster_id) + '-infra'
             bind_entry.append(infra_name + "\t\tA\t" + ip4addr[0])
@@ -481,15 +510,48 @@ class VMwareOnOCP(object):
         if not self.no_confirm:
             click.confirm('Continue using these values?', abort=True)
 
-        if self.auth_type == 'none':
-            playbooks = ["playbooks/ocp-install.yaml", "playbooks/minor-update.yaml"]
-            for ocp_file in playbooks:
-                for line in fileinput.input(ocp_file, inplace=True):
-                    if line.startswith('#openshift_master_identity_providers:'):
-                        line = line.replace('#', '    ')
-                        print line
+        install_file = "playbooks/ocp-install.yaml"
+
+        for line in fileinput.input(install_file, inplace=True):
+            if line.startswith("    openshift_hosted_registry_storage_host:"):
+                print ("    openshift_hosted_registry_storage_host: " +
+                       self.nfs_host + "." + self.dns_zone)
+            elif line.startswith("    openshift_hosted_registry_storage_nfs_directory:"):
+                print ("    openshift_hosted_registry_storage_nfs_directory: " +
+                       self.nfs_registry_mountpoint)
+            elif line.startswith("    openshift_hosted_metrics_storage_host:"):
+                print ("    openshift_hosted_metrics_storage_host: " +
+                       self.nfs_host + "." + self.dns_zone)
+            elif line.startswith("    openshift_hosted_metrics_storage_nfs_directory:"):
+                print ("    openshift_hosted_metrics_storage_nfs_directory: " +
+                       self.nfs_registry_mountpoint)
+            else:
+                print line,
+
+        update_file = "playbooks/minor-update.yaml"
+        for ocp_file in ("playbooks/ocp-install.yaml", "playbooks/minor-update.yaml"):
+            for line in fileinput.input(ocp_file, inplace=True):
+                if line.startswith("    wildcard_zone:"):
+                    print ("    wildcard_zone: " + self.app_dns_prefix + "." +
+                           self.dns_zone)
+                elif line.startswith("    load_balancer_hostname:"):
+                    if int(self.master_nodes) > 1:
+                        lb_url = self.lb_host
                     else:
-                        print line,
+                        lb_url = '%s-master-0' % self.ocp_hostname_prefix
+                    print "    load_balancer_hostname: " + lb_url
+                elif line.startswith("    deployment_type:"):
+                    print "    deployment_type: " + self.deployment_type
+                else:
+                    print line,
+
+        if self.auth_type == 'none':
+            for line in fileinput.input(install_file, inplace=True):
+                if line.startswith('#openshift_master_identity_providers:'):
+                    line = line.replace('#', '    ')
+                    print line
+                else:
+                    print line,
         elif self.auth_type == 'ldap':
             l_bdn = ""
 
@@ -516,12 +578,6 @@ class VMwareOnOCP(object):
                 url_base = bindDN.replace(("CN=" + self.ldap_user + ","), "")
                 url = "ldap://" + self.ldap_fqdn + ":389/" + url_base + "?sAMAccountName"
 
-            install_file = "playbooks/ocp-install.yaml"
-            if self.lb_ha_ip:
-                lb_name = self.lb_ha_ip
-            else:
-                lb_name = self.lb_host + "." + self.dns_zone
-
             for line in fileinput.input(install_file, inplace=True):
             # Parse our ldap url
                 if line.startswith("      url:"):
@@ -530,32 +586,6 @@ class VMwareOnOCP(object):
                     print "      bindPassword: " + self.ldap_user_password
                 elif line.startswith("      bindDN:"):
                     print "      bindDN: " + bindDN
-                elif line.startswith("    wildcard_zone:"):
-                    print "    wildcard_zone: " + self.app_dns_prefix + "." + self.dns_zone
-                elif line.startswith("    load_balancer_hostname:"):
-                    print "    load_balancer_hostname: " + lb_name
-                elif line.startswith("    deployment_type:"):
-                    print "    deployment_type: " + self.deployment_type
-                elif line.startswith("    openshift_hosted_registry_storage_host:"):
-                    print "    openshift_hosted_registry_storage_host: " + self.nfs_host + "." + self.dns_zone
-                elif line.startswith("    openshift_hosted_registry_storage_nfs_directory:"):
-                    print "    openshift_hosted_registry_storage_nfs_directory: " + self.nfs_registry_mountpoint
-                elif line.startswith("    openshift_hosted_metrics_storage_host:"):
-                    print "    openshift_hosted_metrics_storage_host: " + self.nfs_host + "." + self.dns_zone
-                elif line.startswith("    openshift_hosted_metrics_storage_nfs_directory:"):
-                    print "    openshift_hosted_metrics_storage_nfs_directory: " + self.nfs_registry_mountpoint
-                else:
-                    print line,
-
-            # Provide values for update and add node playbooks       
-            update_file = "playbooks/minor-update.yaml"
-            for line in fileinput.input(update_file, inplace=True):
-                if line.startswith("    wildcard_zone:"):
-                    print "    wildcard_zone: " + self.app_dns_prefix + "." + self.dns_zone
-                elif line.startswith("    load_balancer_hostname:"):
-                    print "    load_balancer_hostname: " + self.lb_host + "." + self.dns_zone
-                elif line.startswith("    deployment_type:"):
-                    print "    deployment_type: " + self.deployment_type
                 else:
                     print line,
 
@@ -577,7 +607,8 @@ class VMwareOnOCP(object):
         tags = []
         tags.append('setup')
 
-        if self.byo_nfs == "False":
+        # TODO(vponomar): make it configurable
+        if self.byo_nfs == "False" and False:
             tags.append('nfs')
 
         tags.append('prod')
@@ -643,6 +674,7 @@ class VMwareOnOCP(object):
             vm_gw=%s \
             vm_netmask=%s \
             vm_network=%s \
+            vm_ipaddr_allocation_type=%s \
             wildcard_zone=%s \
             console_port=%s \
             cluster_id=%s \
@@ -661,6 +693,7 @@ class VMwareOnOCP(object):
             openshift_hosted_metrics_deploy=%s \
             lb_host=%s \
             lb_ha_ip=%s \
+            ocp_hostname_prefix=%s \
             nfs_host=%s \
             nfs_registry_mountpoint=%s \' %s' % ( tags,
                             self.vcenter_host,
@@ -678,6 +711,7 @@ class VMwareOnOCP(object):
                             self.vm_gw,
                             self.vm_netmask,
                             self.vm_network,
+                            self.vm_ipaddr_allocation_type,
                             self.wildcard_zone,
                             self.console_port,
                             self.cluster_id,
@@ -696,6 +730,7 @@ class VMwareOnOCP(object):
                             self.openshift_hosted_metrics_deploy,
                             self.lb_host,
                             self.lb_ha_ip,
+                            self.ocp_hostname_prefix,
                             self.nfs_host,
                             self.nfs_registry_mountpoint,
                             playbook)
