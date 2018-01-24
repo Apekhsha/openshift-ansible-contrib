@@ -1,0 +1,25 @@
+---
+- hosts: cns
+  tasks:
+  - name: Install required kernel modules on CNS nodes
+    import_role:
+      name: openshift_storage_glusterfs
+      tasks_from: kernel_modules.yml
+
+- hosts: master
+  tasks:
+  - name: Perform actions on master node which are required to install CNS 
+    import_role:
+      name: openshift_storage_glusterfs
+    vars:
+      openshift_storage_glusterfs_namespace: 'default'
+      openshift_storage_glusterfs_is_native: true
+      openshift_storage_glusterfs_nodeselector: 'glusterfs=cns'
+      openshift_storage_glusterfs_storageclass: true
+      openshift_storage_glusterfs_version: 'latest'
+      openshift_storage_glusterfs_block_version: 'latest'
+      openshift_storage_glusterfs_block_host_vol_size: 299
+      openshift_storage_glusterfs_s3_deploy: false
+      openshift_storage_glusterfs_heketi_version: 'latest'
+      openshift_storage_glusterfs_heketi_topology_load: true
+  run_once: true
