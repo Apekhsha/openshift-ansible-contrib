@@ -517,7 +517,7 @@ class VMWareInventory(object):
 
                 rdata[method] = self._process_object_types(
                     methodToCall,
-                    level=((level - 10) if method == 'guest' else level))
+                    level=((level - 1) if method in ('guest', 'net') else level))
 
         return rdata
 
