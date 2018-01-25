@@ -12,9 +12,10 @@
     import_role:
       name: openshift_storage_glusterfs
     vars:
-      openshift_storage_glusterfs_namespace: 'default'
+      openshift_storage_glusterfs_name: 'cns'
+      openshift_storage_glusterfs_namespace: 'cns'
       openshift_storage_glusterfs_is_native: true
-      openshift_storage_glusterfs_nodeselector: 'glusterfs=cns'
+      #openshift_storage_glusterfs_nodeselector: 'glusterfs=cns'
       openshift_storage_glusterfs_storageclass: true
       openshift_storage_glusterfs_version: 'latest'
       openshift_storage_glusterfs_block_version: 'latest'
